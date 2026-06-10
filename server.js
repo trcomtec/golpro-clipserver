@@ -18,7 +18,17 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 
+import ws from "ws";
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false },
+  global: {
+    fetch: fetch,
+  },
+  realtime: {
+    transport: ws,
+  },
+});
   auth: { persistSession: false },
 });
   auth: { persistSession: false },
