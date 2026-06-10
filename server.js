@@ -27,29 +27,25 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
-// Health check
 app.get("/", (_req, res) => {
   res.json({ ok: true, service: "golpro-clipserver" });
 });
 
-// Status de um clipe
 app.get("/status/:id", async (req, res) => {
   const { data, error } = await supabase
     .from("clipes")
     .select("id, status, url_clipe, titulo")
     .eq("id", req.params.id)
     .single();
-
   if (error) return res.status(404).json({ error: "Clipe não encontrado" });
   res.json(data);
 });
 
-// Gerar clipe
 app.post("/gerar-clipe", async (req, res) => {
   const { clipe_id, youtube_url, inicio_segundos, fim_segundos, titulo } = req.body;
 
   if (!clipe_id || !youtube_url || inicio_segundos == null || fim_segundos == null) {
-    return res.status(400).json({ error: "Parâmetros obrigatórios: clipe_id, youtube_url, inicio_segundos, fim_segundos" });
+    return res.status(400).json({ error: "Parâmetros obrigatórios faltando" });
   }
 
   const duracao = fim_segundos - inicio_segundos;
@@ -57,13 +53,10 @@ app.post("/gerar-clipe", async (req, res) => {
     return res.status(400).json({ error: "Duração inválida. Máximo 5 minutos." });
   }
 
-  // Responde imediatamente e processa em background
   res.json({ ok: true, clipe_id, status: "processando" });
 
-  // Atualiza status para processando
   await supabase.from("clipes").update({ status: "processando" }).eq("id", clipe_id);
 
-  // Processa em background
   processarClipe({ clipe_id, youtube_url, inicio_segundos, duracao, titulo }).catch(console.error);
 });
 
@@ -74,20 +67,27 @@ async function processarClipe({ clipe_id, youtube_url, inicio_segundos, duracao,
   try {
     console.log(`[${clipe_id}] Obtendo URL do stream...`);
 
-    // Pega a URL direta do stream via yt-dlp
     const streamUrl = await new Promise((resolve, reject) => {
-      const ytdlp = spawn("yt-dlp", ["-g", "-f", "best[ext=mp4]/best", youtube_url]);
+      const ytdlp = spawn("yt-dlp", [
+        "-g",
+        "-f", "best[ext=mp4]/best",
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "--no-check-certificates",
+        "--extractor-args", "youtube:player_client=web",
+        youtube_url
+      ]);
       let out = "";
+      let err = "";
       ytdlp.stdout.on("data", (d) => (out += d));
+      ytdlp.stderr.on("data", (d) => (err += d));
       ytdlp.on("close", (code) => {
-        if (code === 0) resolve(out.trim().split("\n")[0]);
-        else reject(new Error(`yt-dlp saiu com código ${code}`));
+        if (code === 0 && out.trim()) resolve(out.trim().split("\n")[0]);
+        else reject(new Error(`yt-dlp erro (${code}): ${err.slice(0, 300)}`));
       });
     });
 
-    console.log(`[${clipe_id}] Cortando clipe ${inicio_segundos}s → ${inicio_segundos + duracao}s`);
+    console.log(`[${clipe_id}] Cortando ${inicio_segundos}s por ${duracao}s...`);
 
-    // Corta com ffmpeg
     await new Promise((resolve, reject) => {
       const ff = spawn("ffmpeg", [
         "-ss", String(inicio_segundos),
@@ -103,7 +103,6 @@ async function processarClipe({ clipe_id, youtube_url, inicio_segundos, duracao,
       });
     });
 
-    // Upload para Supabase Storage
     const fileBuffer = await readFile(outFile);
     const storagePath = `clipes/${clipe_id}.mp4`;
 
@@ -120,7 +119,7 @@ async function processarClipe({ clipe_id, youtube_url, inicio_segundos, duracao,
       .update({ status: "pronto", url_clipe: urlData.publicUrl })
       .eq("id", clipe_id);
 
-    console.log(`[${clipe_id}] Clipe pronto: ${urlData.publicUrl}`);
+    console.log(`[${clipe_id}] Pronto: ${urlData.publicUrl}`);
 
   } catch (err) {
     console.error(`[${clipe_id}] Erro:`, err.message);
