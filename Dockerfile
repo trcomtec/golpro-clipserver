@@ -1,25 +1,23 @@
-FROM node:20-bookworm-slim
+FROM node:20-slim
 
-# Instala ffmpeg, python (necessario para yt-dlp) e curl
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
-    ca-certificates \
+    python3-pip \
     curl \
- && rm -rf /var/lib/apt/lists/*
-
-# Instala yt-dlp (binario estatico, atualizado)
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
- && chmod a+rx /usr/local/bin/yt-dlp
+    && pip3 install yt-dlp --break-system-packages \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install --omit=dev
+RUN npm install
 
 COPY server.js ./
 
-ENV PORT=10000
-EXPOSE 10000
+RUN mkdir -p /tmp/clipes
+
+EXPOSE 3000
 
 CMD ["node", "server.js"]
