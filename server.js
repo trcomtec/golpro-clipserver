@@ -21,6 +21,8 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
+  auth: { persistSession: false },
+});
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
