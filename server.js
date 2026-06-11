@@ -70,6 +70,7 @@ async function processarClipe({ clipe_id, youtube_url, inicio_segundos, duracao,
     const streamUrl = await new Promise((resolve, reject) => {
       const ytdlp = spawn("yt-dlp", [
         "-g",
+        "--cookies", "/etc/secrets/cookies.txt",
         "-f", "best[ext=mp4]/best",
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "--no-check-certificates",
